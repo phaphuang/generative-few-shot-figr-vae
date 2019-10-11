@@ -40,8 +40,8 @@ class MnistMetaEnv:
 
     def make_tasks(self):
         self.task_to_examples = {}
-        self.all_tasks = set(self.data.train_labels.numpy())
-        for i, digit in enumerate(self.data.train_labels.numpy()):
+        self.all_tasks = set(self.data.targets.numpy())
+        for i, digit in enumerate(self.data.targets.numpy()):
             if str(digit) not in self.task_to_examples:
                 self.task_to_examples[str(digit)] = []
             self.task_to_examples[str(digit)].append(i)
@@ -104,7 +104,7 @@ class FIGR8MetaEnv(Dataset):
     
     def get_tasks(self):
         if os.path.exists('./data/FIGR-8') is False:
-            if os.path.exits('./data') is False:
+            if os.path.exists('./data') is False:
                 os.mkdir('./data')
             os.mkdir('./data/FIGR-8')
             from google_drive_downloader import GoogleDriveDownloader as gdd
