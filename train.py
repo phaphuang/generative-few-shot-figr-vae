@@ -29,19 +29,6 @@ import matplotlib.pyplot as plt
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def wassertein_loss(inputs, targets):
-    return torch.mean(inputs * targets)
-
-def normalize_data(data):
-    data *= 2
-    data -= 1
-    return data
-
-def unnormalize_data(data):
-    data += 1
-    data /= 2
-    return data
-
 class FIGR:
     def __init__(self, args):
         self.load_args(args)
@@ -88,19 +75,24 @@ class FIGR:
         self.netAE = eval(self.network + '(self.env.channels, self.env.height, self.z_shape)')
         self.meta_netAE = eval(self.network + '(self.env.channels, self.env.height, self.z_shape)').to(device)
         self.netAE_optim = optim.Adam(params=self.netAE.parameters(), lr=self.outer_learning_rate)
-        self.meta_netAE_optim = optim.SGD(params=self.meta_netAE.parameters(), lr=self.inner_learning_rate)
+        self.meta_netAE_optim = optim.Adam(params=self.meta_netAE.parameters(), lr=self.inner_learning_rate)
     
     def reset_meta_model(self):
         self.meta_netAE.train()
         self.meta_netAE.load_state_dict(self.netAE.state_dict())
+
+    def loss_function(self, recon_x, x, mu, logvar):
+        BCE = F.binary_cross_entropy(recon_x.view(-1, self.x_dim), x.view(-1, self.x_dim), reduction='sum')
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        return BCE + KLD
     
     def inner_loop(self, real_batch):
         self.meta_netAE.train()
         self.meta_netAE_optim.zero_grad()
         
-        recon_batch, z = self.meta_netAE(real_batch)
+        recon_batch, mu, logvar = self.meta_netAE(real_batch)
         
-        reconstruction_loss = F.binary_cross_entropy(recon_batch.squeeze().view(-1, self.x_dim), real_batch.view(-1, self.x_dim), reduction='sum')
+        reconstruction_loss = self.loss_function(recon_batch, real_batch, mu, logvar)
         
         reconstruction_loss.backward()
         self.meta_netAE_optim.step()
@@ -154,7 +146,7 @@ class FIGR:
             
             plt.imshow(img[0], cmap='Greys_r')
             plt.show()
-            print("Loss:", convae_total_loss)
+            print("Validation Loss:", convae_total_loss)
             
 
     def training(self):
@@ -163,7 +155,7 @@ class FIGR:
             self.meta_training_loop()
 
             # Validation run every 10000 training loop
-            if self.eps % 100 == 0:
+            if self.eps % 1000 == 0:
                 self.validation_run()
                 self.checkpoint_model()
             self.eps += 1
@@ -176,5 +168,6 @@ class FIGR:
 if __name__ == '__main__':
     args = docopt(__doc__)
     print(args)
+    print(device)
     env = FIGR(args)
     env.training()
